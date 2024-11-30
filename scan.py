@@ -1,13 +1,8 @@
 from scapy.all import ARP, Ether, srp
-import socket
-import struct
+import ipaddress  # Import to handle IP addresses for sorting
 
 # Your network's IP range (modify this as per your network)
 network_ip_range = "192.168.1.0/24"
-
-def ip_to_int(ip):
-    """Convert an IP address string to an integer."""
-    return struct.unpack("!I", socket.inet_aton(ip))[0]
 
 def scan_network():
     print("Scanning the network...")
@@ -21,28 +16,38 @@ def scan_network():
     # Send the packet and capture responses
     answered, _ = srp(packet, timeout=2, verbose=False)
 
-    # Extract IP and MAC addresses from responses
+    # Extract and store active IPs with their MAC addresses
     devices = []
     for sent, received in answered:
-        devices.append((received.psrc, received.hwsrc))
-
-    return devices
-
-def scan_devices():
-    devices = scan_network()
+        devices.append({
+            "ip": received.psrc,
+            "mac": received.hwsrc
+        })
 
     # Sort devices by IP address numerically
-    devices.sort(key=lambda x: ip_to_int(x[0]))
+    devices.sort(key=lambda device: ipaddress.IPv4Address(device["ip"]))
 
-    # Display devices in a table
-    print("\nActive Devices on the Network:")
-    print("-" * 50)
-    print("{:<5} {:<20} {:<20}".format("ID", "IP Address", "MAC Address"))
-    print("-" * 50)
+    # Assign IDs based on sorted order
+    for idx, device in enumerate(devices, 1):
+        device["id"] = idx
 
-    for idx, (ip, mac) in enumerate(devices, start=1):
-        print(f"{idx:<5} {ip:<20} {mac:<20}")
-    print("-" * 50)
-    
     return devices
+
+def scan_devices(silent=False):
+    """
+    Scans the network for active devices and optionally suppresses the output.
+    """
+    devices = scan_network()
+
+    # If silent is False, print the device information
+    if not silent:
+        print("\nActive Devices on the Network:")
+        print("-" * 50)
+        print("{:<10} {:<20} {:<20} {:<20}".format("ID", "IP Address", "MAC Address", "Status"))
+        print("-" * 50)
+
+        for device in devices:
+            print("{:<10} {:<20} {:<20} Connected".format(device["id"], device["ip"], device["mac"]))
+
+    return devices  # Return devices list for later use
 
